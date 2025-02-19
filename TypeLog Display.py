@@ -16,7 +16,7 @@ data_dict = {
     "SPHI": ["SPHI", "SPH1", "SPHI_LS", "SPHL", "XPOR"],
     "PEF": ["PEF", "PE", "PEF8", "PEFZ"],
     "DeepRes": ["ILD", "90IN_4FT_R", "90IN_4FT_R_S", "AHT90", "AT90", "ATCO90", "RILD", "RLA5", "RO90", "DDLL", "DEEP_RESISTIVITY", "HLLD", "IDPH", "LGRD", "RD", "RESISTIVITY_(SHORT-SPACING)", "RESISTIVITY", "RESISTIVITY_(LONG-SPACING)", "RESISTIVITY_(SHORT-SPACING)", "RILD", "RLA5", "RO90", "RT90"],
-    "MedRes": ["ILM", "LLM", "AHT60", "60IN_4FT_R", "IMPH", "RF60", "RILM", "RLA3", "RMLL", "RO60", "RT60"],
+    "MedRes": ["ILM", "LLM", "AHT60", "60IN_4FT_R", "IMPH", "RF60", "RILM", "RLA3", "RMLL", "RO60", "RT60",'AO30'],
     "ShalRes": ["RXO", "RXO8", "RXOZ", "RXO_HRLT", "RXRT", "SFLU", "SGRD", "SHORT_RESISTIVITY", "DSLL", "HLLS", "RLA1", "RS", "RSOZ", "RT10", "AHT10", "AT30", "RF10", "RO10"]
 }
 
@@ -39,7 +39,9 @@ tops_file_path = r"C:\Python3.12\Scripts\LAS Tools\TestTops.csv"
 
 # Load LAS file
 las = lasio.read(las_file_path)
-depth = las.index  
+depth = las.index
+
+print([curve.mnemonic for curve in las.curves])
 
 # Extract well name and well number from LAS metadata
 well_name = las.well.get("WELL", "Unknown Well").value
@@ -52,11 +54,15 @@ DResistivity_mnemonic, Dresistivity = get_best_log(data_dict["DeepRes"])
 MResistivity_mnemonic, Mresistivity = get_best_log(data_dict["MedRes"])
 SResistivity_mnemonic, Sresistivity = get_best_log(data_dict["ShalRes"])
 neutron_porosity_mnemonic, neutron_porosity = get_best_log(data_dict["NPHI"])
+sonic_porosity_mnemonic, sonic_porosity = get_best_log(data_dict["SPHI"])
 density_porosity_mnemonic, density_porosity = get_best_log(data_dict["DPHI"])
 
 # Load formation tops
 tops_df = pd.read_csv(tops_file_path)
 tops_df["Depth"] = pd.to_numeric(tops_df["Depth"], errors="coerce")
+
+# Close any previously open figures
+plt.close('all')
 
 # Set up figure
 fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(12, 12), sharey=True,
@@ -67,6 +73,8 @@ fig.suptitle(well_name, fontsize=14, fontweight="bold")
 if gr is not None:
     axes[0].plot(gr, depth, color="black", lw=.25, label="Gamma Ray (API)")
 axes[0].set_xlabel("GR (API)")
+axes[0].fill_betweenx(depth, 100, gr, where=(gr < 100), color="lightblue", alpha=0.5)
+axes[0].fill_betweenx(depth, 100, gr, where=(gr > 100), color="tan", alpha=0.5)
 axes[0].set_xlim(0, 150)
 axes[0].invert_yaxis()
 axes[0].grid()
@@ -75,10 +83,12 @@ axes[0].legend()
 # Resistivity Track
 if Dresistivity is not None:
     axes[1].semilogx(Dresistivity, depth, linestyle=":", color="red", lw=1, label="Deep Resistivity")
+    axes[1].fill_betweenx(depth, 20, Dresistivity, where=(Dresistivity < 20), color="lightblue", alpha=0.5)
+    axes[1].fill_betweenx(depth, 20, Dresistivity, where=(Dresistivity > 20), color="yellow", alpha=0.5)
 if Mresistivity is not None:
     axes[1].semilogx(Mresistivity, depth, linestyle="--", color="blue", lw=.25, label="Medium Resistivity")
 if Sresistivity is not None:
-    axes[1].semilogx(Sresistivity, depth, color="black", lw=.11, label="Shallow Resistivity")
+    axes[1].semilogx(Sresistivity, depth, color="black", lw=.1, label="Shallow Resistivity")
 
 axes[1].set_xlabel("Resistivity (Ohm.m)")
 axes[1].set_xlim(0.2, 2000)
@@ -88,26 +98,30 @@ axes[1].legend()
 
 # Porosity & PEF Track
 ax2 = axes[2].twiny()
-if density_porosity is not None and neutron_porosity is not None:
-    axes[2].plot(density_porosity, depth, color="red", lw=.75, linestyle="--", label="Density Porosity")
-    axes[2].plot(neutron_porosity, depth, color="green", lw=.75, linestyle=":", label="Neutron Porosity")
+if density_porosity is not None and neutron_porosity is not None and sonic_porosity is not None:
+    axes[2].plot(sonic_porosity, depth, color="purple", lw=.25, linestyle="-", label="Sonic Porosity")
+    axes[2].plot(density_porosity, depth, color="red", lw=.25, linestyle="--", label="Density Porosity")
+    axes[2].plot(neutron_porosity, depth, color="green", lw=.25, linestyle=":", label="Neutron Porosity")
 if pef is not None:
-    ax2.plot(pef, depth, color="blue", lw=.75, linestyle="-", label="PEF")
+    ax2.plot(pef, depth, color="blue", lw=.100, linestyle="-", label="PEF")
 
 axes[2].set_xlabel("Porosity (Fraction)")
 axes[2].set_xlim(0.3, -0.1)
 axes[2].grid()
 ax2.set_xlabel("PEF (barns/e)")
 ax2.set_xlim(0, 40)
+axes[2].set_xticks(np.linspace(-0.1, 0.3, 10))  # Increase number of vertical grid lines
+axes[2].set_xticklabels([f"{tick:.2f}" for tick in np.linspace(-0.1, 0.3, 10)], rotation=90)  # Rotate labels
 ax2.legend(loc="upper right")
 axes[2].legend(loc="lower right")
 
-# Overlay formation tops
-for _, row in tops_df.iterrows():
-    for ax in axes:
-        ax.axhline(y=row["Depth"], color="purple", linestyle="--", linewidth=1)
+# Overlay formation tops if available
+if tops_df is not None:
+    for _, row in tops_df.iterrows():
+        for ax in axes:
+            ax.axhline(y=row["Depth"], color="black", linewidth=1)
         axes[0].text(5, row["Depth"], row["TopName"], verticalalignment="bottom",
-                 color="purple", fontsize=10, fontweight="bold")
+                     color="black", fontsize=10, fontweight="bold")
 
 plt.tight_layout()
 plt.subplots_adjust(top=0.95)
