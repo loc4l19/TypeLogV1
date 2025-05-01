@@ -37,7 +37,7 @@ def get_best_log(alias_group):
     return None, None  
 
 # File paths
-las_file_path = r'C:\Python3.12\CW_Scripts\LAS Tools\Type Log Visualizer\test1.las'
+las_file_path = input("input desired .las file path")
 
 # Load LAS file
 las = lasio.read(las_file_path)
